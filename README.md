@@ -1,66 +1,157 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+## Warning
+LdapRecord has been made by <a href="https://github.com/stevebauman"> Steve Bauman </a> , there is the original repo : <a href="https://github.com/DirectoryTree/LdapRecord-Laravel"> LdapRecord-Laravel </a>. <br/>
+Before continuing you should try to follow the <a href="https://ldaprecord.com/docs/laravel/v3">documentation </a> for LdapRecord-Laravel V3 with breeze.
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+I have made this repositoring because the solution wasn't working for me when i tried to follow the documentation.
+This solution is using <a href="https://ldaprecord.com/docs/core/v3"> LdapRecord </a> , not <a href="https://ldaprecord.com/docs/laravel/v3"> LdapRecord-Laravel</a>
 
-## About Laravel
+## About 
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+A solution to authenticate via your ldap credentials in your laravel application using Breeze.
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+The file updated is "app\Http\Requests\Auth\LoginRequest.php" after breeze has been installed.
+You have to add in your .env file : 
+```
+LDAP_HOST=
+LDAP_BASE_DN=
+```
+## HOW DOES THAT WORK
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+The LoginRequest has been modified to attempts a connexion with users credentials retrieved from login.blade.php.
+If this fails, an identifier error message is returned.
 
-## Learning Laravel
+If it works, we will look for the user in our db from his email and connect him via the Auth class of Laravel.
+If the user is not existing (has never logged in), a user will be created with just an ID and an email (no password is saved).
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+## IMPLEMENT
+<ol>
+    <li> Create a Laravel Project</li>
+    <li> Install Breeze
+    
+```
+        composer require laravel/breeze --dev
+        php artisan breeze:install
+```
 
-## Laravel Sponsors
+</li>
+    <li> Update user table <br>
+        Set all field 'nullable' exept id and email in create_user_table.php (migration)
+        
+```
+            public function up(): void
+    {
+        Schema::create('users', function (Blueprint $table) {
+            $table->id();
+            $table->string('name')->nullable();
+            $table->string('email')->unique();
+            // $table->timestamp('email_verified_at')->nullable();
+            // $table->string('password')->nullable();
+            $table->rememberToken();
+            $table->timestamps();
+        });
+    }
+```
+</li> 
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+<li>Run server
+    
+ ```
+    php artisan migrate
+    php artisan serve
+    npm run dev
+```
+</li>
 
-### Premium Partners
+<li> Add .env variables
+    
+```
+LDAP_HOST=
+LDAP_BASE_DN=
+```
+    
+</li>
 
-- **[Vehikl](https://vehikl.com/)**
-- **[Tighten Co.](https://tighten.co)**
-- **[WebReinvent](https://webreinvent.com/)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel/)**
-- **[Cyber-Duck](https://cyber-duck.co.uk)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Jump24](https://jump24.co.uk)**
-- **[Redberry](https://redberry.international/laravel/)**
-- **[Active Logic](https://activelogic.com)**
-- **[byte5](https://byte5.de)**
-- **[OP.GG](https://op.gg)**
+<li> Update LoginRequest.php
 
-## Contributing
+```
+### LoginRequest.php
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+//Added
+use LdapRecord\Container;
+use LdapRecord\Connection;
+use LdapRecord\Models\Entry;
+use LdapRecord\Auth\Events\Failed;
 
-## Code of Conduct
+class LoginRequest extends FormRequest
+{
+...
+ public function authenticate(): void
+    {
+        $this->ensureIsNotRateLimited();
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+        $email = $this->input('email');
+         $password = $this->input('password');
+        if (!$email || !$password) {
+            throw ValidationException::withMessages([
+                'email' => trans('auth.failed'),
+            ]);
+        }
 
-## Security Vulnerabilities
+        $connection = new Connection([
+            'hosts' => [env('LDAP_HOST')],
+            'username' => $email, 
+            'password' => $password,
+            'base_dn' => env('LDAP_BASE_DN'),
+        ]);
+    
+         try {
+            
+        $connection->connect();
+        
+    
+    } catch (\LdapRecord\Auth\BindException $e) {
+        RateLimiter::hit($this->throttleKey());
+        throw ValidationException::withMessages([
+            'email' => trans('auth.failed'),
+        ]);
+    } catch (\Exception $e) {
+        throw ValidationException::withMessages([
+            'email' => trans('auth.failed'),
+        ]);
+    }
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+    $user = User::where('email', $email)->first();
 
-## License
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+    if (!$user) {
+        $user = new User();
+        $user->email = $email;
+        $user->save();
+    }
+
+    Auth::login($user, $this->boolean('remember'));
+    RateLimiter::clear($this->throttleKey());
+    return;    
+}
+}
+```
+
+If you want to authenticate with username or other variable , you can replace 'username' in connexion object :
+
+        $cn = $this->input('username');
+         $password = $this->input('password');
+
+        $connection = new Connection([
+            'hosts' => [env('LDAP_HOST')],
+            'cb' => $cn, 
+            'password' => $password,
+            'base_dn' => env('LDAP_BASE_DN'),
+        ]);
+
+Don't forget to also replace "email" field in login.blade.php
+</li>
+
+</ol>
+
