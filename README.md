@@ -28,11 +28,13 @@ If the user is not existing (has never logged in), a user will be created with j
 ## IMPLEMENT
 <ol>
     <li> Create a Laravel Project</li>
-    <li> Install Breeze
+    <li> Install Breeze && LdapRecord
     
 ```
         composer require laravel/breeze --dev
         php artisan breeze:install
+        composer require directorytree/ldaprecord
+
 ```
 
 </li>
